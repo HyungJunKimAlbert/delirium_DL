@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 # Custom 
 from dataset.dataset import Delirium_Dataset
 from utils.util import fix_seed, loss_plot, auc_plot, EarlyStopping
-from models.model import CNNLSTMModel, CRNN, AttentionLSTM
+from models.model_static import CNNLSTMModel, CRNN, AttentionLSTM
 
 def train_one_epoch(model, dataloader, optimizer, metric, device):
     model.train()
@@ -26,8 +26,7 @@ def train_one_epoch(model, dataloader, optimizer, metric, device):
         x_emr = x['emr'][:,:].to(device)
         x_vitals = x['vitals'][:, :, :].to(device) # [:,144:,:]      # VITALS: HR/RR/SpO2/DBP/SBP/BT
         y = y.to(device).float()
-        outputs = model(x_emr, x_vitals) 
-        outputs = outputs.float()
+        outputs = model(x_emr, x_vitals).float()
         
         optimizer.zero_grad()
         loss = criterion(outputs, y)
@@ -62,8 +61,7 @@ def valid_one_epoch(model, dataloader, metric, device):
             x_vitals = x['vitals'][:, :, :].to(device) # [:,144:,:]
             y = y.to(device).float()
 
-            outputs = model(x_emr, x_vitals)
-            outputs = outputs.float()
+            outputs = model(x_emr, x_vitals).float()
 
             loss = criterion(outputs, y)
 
@@ -85,10 +83,10 @@ if __name__ == "__main__":
     data_path="/home/hjkim/projects/local_dev/delirium/data"
     dst_path = "/home/hjkim/projects/local_dev/delirium/result_static"
     os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # 1. Dataset
-    BATCH_SIZE=64
+    BATCH_SIZE = 64
     # load npy files
     train_data = np.load(os.path.join(data_path, "train.npy"), allow_pickle=True).item()
     valid_data = np.load(os.path.join(data_path, "valid.npy"), allow_pickle=True).item()
@@ -126,6 +124,7 @@ if __name__ == "__main__":
     # model = AttentionLSTM(emr_size=emr_size, vitals_size=vital_size).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-3)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=False)
+
 # 3. Training & Validation
     train_loss_list = []
     valid_loss_list = [] 
@@ -133,7 +132,7 @@ if __name__ == "__main__":
     valid_auc_list = []
 
     # Early stopping
-    early_stopping = EarlyStopping(patience=10, verbose=True)
+    early_stopping = EarlyStopping(patience=5, verbose=True)
 
     for epoch in range(NUM_EPOCHS):
 
@@ -149,7 +148,7 @@ if __name__ == "__main__":
             break
 
         # Scheduler
-        scheduler.step(val_epoch_loss)
+        scheduler.step(val_auc)
 
         # train results
         train_loss_list.append(train_epoch_loss)
@@ -165,8 +164,7 @@ if __name__ == "__main__":
     auc_plot(train_auc_list, valid_auc_list, dst_path=dst_path)
     
     # Testset
-    model.load_state_dict(best_model)
+    # model.load_state_dict(best_model)
     test_loss, test_auc = valid_one_epoch(model, test_dataloader, metric, device) 
     print(f"BEST PERFORMANCE: {best_epoch}")
     print(f"Test Loss: {test_loss}, Test AUROC: {test_auc}")
-
