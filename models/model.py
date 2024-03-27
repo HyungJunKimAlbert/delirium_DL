@@ -13,11 +13,11 @@ class CNNLSTMBlock(nn.Module):
 
         self.cnn = nn.Sequential(
             # 1
-            nn.Conv1d(in_channels=input_size, out_channels=num_filters, kernel_size=kernel_size, padding=1),
+            nn.Conv1d(in_channels=input_size, out_channels=num_filters, kernel_size=kernel_size, padding=kernel_size//2),
             nn.BatchNorm1d(num_filters),
             nn.Dropout(dropout),
             # 2
-            nn.Conv1d(in_channels=num_filters, out_channels=num_filters*2, kernel_size=kernel_size, padding=1),
+            nn.Conv1d(in_channels=num_filters, out_channels=num_filters*2, kernel_size=kernel_size, padding=kernel_size//2),
             nn.BatchNorm1d(num_filters*2),
             nn.Dropout(dropout),
             nn.ReLU(),
@@ -42,7 +42,7 @@ class CNNLSTMBlock(nn.Module):
     
 
 class CNNLSTMModel(nn.Module):
-    def __init__(self, emr_size, vitals_size, num_filters=128, kernel_size=3, units=256, dropout=0.4):
+    def __init__(self, emr_size, vitals_size, num_filters=256, kernel_size=7, units=256, dropout=0.4):
         super(CNNLSTMModel, self).__init__()
         # CRNN Blocks
         self.cnn_lstm_block = nn.ModuleList(
@@ -53,7 +53,7 @@ class CNNLSTMModel(nn.Module):
         self.bn = nn.BatchNorm1d(units)
         self.dropout = nn.Dropout(dropout)
         self.fc2 = nn.Linear(units, 1)
-        self.sigmoid = nn.Sigmoid()
+        # self.sigmoid = nn.Sigmoid()
 
     def forward(self, x_emr, x_vitals):
         x_emr = x_emr.float()  # Convert input EMR data to Double type
@@ -64,7 +64,7 @@ class CNNLSTMModel(nn.Module):
         h = self.bn(h)
         h = self.dropout(h)
         h = self.fc2(h)                     # torch.Size([32, 1])
-        h = self.sigmoid(h)                 # torch.Size([32, 1])
+        # h = self.sigmoid(h)                 # torch.Size([32, 1])
 
         return h.squeeze()
 
@@ -79,7 +79,7 @@ class ResBlock(nn.Module):
         self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size, padding=kernel_size//2)
         self.bn2 = nn.BatchNorm1d(out_channels)
         self.relu = nn.ReLU(inplace=True)
-
+        self.dropout = nn.Dropout(p=0.4)
         self.shortcut = nn.Sequential()
         if in_channels != out_channels:
             self.shortcut = nn.Sequential(
@@ -90,23 +90,26 @@ class ResBlock(nn.Module):
     def forward(self, x):
         residual = self.shortcut(x)
         x = self.relu(self.bn1(self.conv1(x)))
+        x = self.dropout(x)
         x = self.bn2(self.conv2(x))
+        x = self.dropout(x)
         x += residual
+        x = self.dropout(x)
         x = self.relu(x)
-
         return x
     
 class CRNN(nn.Module):
-    def __init__(self, emr_size, vitals_size, num_filters=128, hidden_size=256, dropout_rate=0.5):
+    def __init__(self, emr_size, vitals_size, num_filters=256, hidden_size=256, dropout_rate=0.5):
         super(CRNN, self).__init__()
         # CNN Layer
-        self.resblock1 = ResBlock(vitals_size, num_filters, kernel_size=5)
-        self.resblock2 = ResBlock(num_filters, num_filters, kernel_size=5)
-        self.resblock3 = ResBlock(num_filters, num_filters, kernel_size=5)
+        self.resblock1 = ResBlock(vitals_size, num_filters, kernel_size=7)
+        self.resblock2 = ResBlock(num_filters, num_filters, kernel_size=7)
+        self.resblock3 = ResBlock(num_filters, num_filters, kernel_size=7)
         self.dropout_cnn = nn.Dropout(dropout_rate)
         # RNN Layer
         self.bi_lstm = nn.LSTM(num_filters, hidden_size, num_layers=2, batch_first=True, bidirectional=True)
         self.layer_norm = nn.LayerNorm(hidden_size*2)
+        self.dropout_lstm = nn.Dropout(dropout_rate)
         # FC layer
         self.fc = nn.Linear((emr_size + hidden_size*2), hidden_size)
         self.fc2 = nn.Linear(hidden_size, 1)
@@ -124,7 +127,7 @@ class CRNN(nn.Module):
         # LSTM Layer
         x_vitals = x_vitals.permute(0, 2, 1) # input shape: (batch_size, 187, 1) 
         x_vitals, _ = self.bi_lstm(x_vitals)
-        x_vitals = self.layer_norm(x_vitals)  # Apply LayerNorm to LSTM output
+        x_vitals = self.dropout_lstm(x_vitals)  # Apply LayerNorm to LSTM output
         hs = x_vitals[:, -1, :]
         # Concat EMR + Vitals
         h = torch.cat([x_emr, hs], dim=-1) # torch.Size([32, 148])
@@ -132,7 +135,7 @@ class CRNN(nn.Module):
         h = self.fc(h)
         h = self.dropout_fc(h)
         h = self.fc2(h)
-        h = self.sigmoid(h)           
+        # h = self.sigmoid(h)           
 
         return h.squeeze()
 
@@ -152,11 +155,12 @@ class Attention(nn.Module):
         return context, attn_weights
 
 class AttentionLSTM(nn.Module):
-    def __init__(self, emr_size, vitals_size, hidden_size=128, num_classes=1, dropout_rate=0.5):
+    def __init__(self, emr_size, vitals_size, hidden_size=256, num_classes=1, dropout_rate=0.4):
         super(AttentionLSTM, self).__init__()
         # LSTM Layer
-        self.bi_lstm = nn.LSTM(vitals_size, hidden_size, num_layers=2, batch_first=True, bidirectional=True)
-
+        self.bi_lstm = nn.LSTM(vitals_size, hidden_size, num_layers=3, batch_first=True, bidirectional=True)
+        self.bi_lstm2 = nn.LSTM(hidden_size*2, hidden_size, num_layers=3, batch_first=True, bidirectional=True)
+        self.dropout_lstm = nn.Dropout(dropout_rate)
         # Attention Layer
         self.attention = Attention(hidden_size*2)
         # FC Layer
@@ -170,6 +174,8 @@ class AttentionLSTM(nn.Module):
         x_vitals = x_vitals.float()
         # LSTM Layer
         lstm_out, _, = self.bi_lstm(x_vitals)
+        # lstm_out, _, = self.bi_lstm2(self.dropout(lstm_out))
+
         # Attention Layer
         context, attn_weights = self.attention(lstm_out)
         # Concat EMR + Vitals
@@ -181,5 +187,6 @@ class AttentionLSTM(nn.Module):
         h = self.fc2(h)
         h = self.sigmoid(h).squeeze()       
 
-        return h, attn_weights
+        # return h, attn_weights    # Attention score
+        return h
     
