@@ -84,17 +84,17 @@ if __name__ == "__main__":
     dst_path = "/home/hjkim/projects/local_dev/delirium/result"
     # For 
     os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     os.environ["TORCH_USE_CUDA_DSA"] = '1'
     # torch.cuda.empty_cache()
 # 1. Dataset
-    BATCH_SIZE=128
-    LEAD_TIME = 2
-    DATA_LENGTH =  8 * 12   # 1Hour = 12 vitals
+    BATCH_SIZE = 32
+    LEAD_TIME = 1
+    DATA_LENGTH =  1 * 12   # 1Hour = 12 vitals
     # load npy files
-    train_data = np.load(os.path.join(data_path, "train_" + str(LEAD_TIME) + "h.npy"), allow_pickle=True).item()
-    valid_data = np.load(os.path.join(data_path, "valid_" + str(LEAD_TIME) + "h.npy"), allow_pickle=True).item()
-    test_data = np.load(os.path.join(data_path, "test_" + str(LEAD_TIME) + "h.npy"), allow_pickle=True).item()
+    train_data = np.load(os.path.join(data_path, "train_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
+    valid_data = np.load(os.path.join(data_path, "valid_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
+    test_data = np.load(os.path.join(data_path, "test_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
     # create dataset
     train_dataset = Delirium_Dataset(train_data)
     valid_dataset = Delirium_Dataset(valid_data)
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     model = CNNLSTMModel(emr_size, vital_size).to(device)
     # model = CRNN(emr_size=emr_size, vitals_size=vital_size).to(device)
     # model = AttentionLSTM(emr_size=emr_size, vitals_size=vital_size).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-2)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=False)
     
 # 3. Training & Validation
@@ -137,19 +137,29 @@ if __name__ == "__main__":
     valid_auc_list = []
 
     # Early stopping
-    early_stopping = EarlyStopping(patience=10, verbose=True)
+    # early_stopping = EarlyStopping(patience=10, verbose=True)
+    best_val_auc = 0.0
 
     for epoch in range(NUM_EPOCHS):
 
         train_epoch_loss, train_auc = train_one_epoch(model, train_dataloader, optimizer, criterion, metric, device, DATA_LENGTH)  # train
         val_epoch_loss, val_auc = valid_one_epoch(model, valid_dataloader, criterion, metric, device, DATA_LENGTH) # valid
 
-        early_stopping(val_auc)
+        # early_stopping(val_auc)
 
-        if early_stopping.early_stop:
-            print("Early stopping")
+        # if early_stopping.early_stop:
+        #     print("Early stopping")
+        #     best_epoch = epoch
+        #     best_model = model.state_dict()
+        #     break
+        
+        if best_val_auc < val_auc:
             best_epoch = epoch
+            best_val_auc = val_auc
             best_model = model.state_dict()
+
+        if epoch - best_epoch > 5:
+            print("Early Stopping...")
             break
 
         # Scheduler
@@ -169,7 +179,7 @@ if __name__ == "__main__":
     auc_plot(train_auc_list, valid_auc_list, dst_path=dst_path)
     
     # Testset
-    # model.load_state_dict(best_model)   # best model weights
+    model.load_state_dict(best_model)   # best model weights
     test_loss, test_auc = valid_one_epoch(model, test_dataloader, criterion, metric, device, DATA_LENGTH) 
     print(f"BEST PERFORMANCE: {best_epoch}")
     print(f"Test Loss: {test_loss}, Test AUROC: {test_auc}")
