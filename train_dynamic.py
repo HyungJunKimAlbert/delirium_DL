@@ -90,11 +90,15 @@ if __name__ == "__main__":
 # 1. Dataset
     BATCH_SIZE = 32
     LEAD_TIME = 1
-    DATA_LENGTH =  1 * 12   # 1Hour = 12 vitals
+    DATA_LENGTH =  2 * 12   # 1Hour = 12 vitals
     # load npy files
-    train_data = np.load(os.path.join(data_path, "train_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
-    valid_data = np.load(os.path.join(data_path, "valid_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
-    test_data = np.load(os.path.join(data_path, "test_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
+    # train_data = np.load(os.path.join(data_path, "train_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
+    # valid_data = np.load(os.path.join(data_path, "valid_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
+    # test_data = np.load(os.path.join(data_path, "test_" + str(LEAD_TIME) + "h_add_labs.npy"), allow_pickle=True).item()
+    train_data = np.load(os.path.join(data_path, "train_" + str(LEAD_TIME) + "h.npy"), allow_pickle=True).item()
+    valid_data = np.load(os.path.join(data_path, "valid_" + str(LEAD_TIME) + "h.npy"), allow_pickle=True).item()
+    test_data = np.load(os.path.join(data_path, "test_" + str(LEAD_TIME) + "h.npy"), allow_pickle=True).item()
+    
     # create dataset
     train_dataset = Delirium_Dataset(train_data)
     valid_dataset = Delirium_Dataset(valid_data)
