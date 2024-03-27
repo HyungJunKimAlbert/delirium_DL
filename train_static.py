@@ -132,7 +132,7 @@ if __name__ == "__main__":
     valid_auc_list = []
 
     # Early stopping
-    early_stopping = EarlyStopping(patience=5, verbose=True)
+    early_stopping = EarlyStopping(patience=10, verbose=True)
 
     for epoch in range(NUM_EPOCHS):
 
