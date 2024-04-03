@@ -99,8 +99,8 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, drop_last=True)
     valid_dataloader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, drop_last=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, drop_last=True)
-    emr_size = train_data['emr'][:,:].shape[1]
-    vital_size = train_data['vitals'][:, :, :].shape[2]
+    emr_size = train_data['emr'][:,:].shape[1] + train_data['medication'][:,:].shape[1]
+    vital_size = train_data['vitals'][:, :, :].shape[2] 
     print(f"TRAIN SIZE: {len(train_dataloader)}, VALID SIZE: {len(valid_dataloader)}, TEST SIZE: {len(test_dataloader)}")
     print("LABEL")
     print(f"TRAIN DELIRIUM: {train_data['label'].sum()}, NON-DELIRIUM :{ len(train_data['label']) - train_data['label'].sum() } \
