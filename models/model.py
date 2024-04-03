@@ -190,3 +190,103 @@ class AttentionLSTM(nn.Module):
         # return h, attn_weights    # Attention score
         return h
     
+
+
+# Transformer LSTM
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=512):
+        super(PositionalEncoding, self).__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(1000.0))/d_model))
+        pe[:, 0::2] = torch.sin(position*div_term)
+        pe[:, 1::2] = torch.cos(position*div_term)                
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1)]
+    
+class TransformerLSTM(nn.Module):
+    def __init__(self, emr_size, vitals_size, hidden_size=4096, num_classes=1, dropout=0.3):
+        super(TransformerLSTM, self).__init__()
+
+        self.embedding = nn.Linear(vitals_size, hidden_size)
+        self.pos_encoder = PositionalEncoding(hidden_size)
+        self.transformer_encoder = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=4096, nhead=16, dim_feedforward=4096, dropout=0.2), num_layers=2)
+        self.bi_lstm = nn.LSTM(hidden_size, hidden_size//2, num_layers=3, batch_first=True, bidirectional=True)
+        # FC Layer
+        self.fc1 = nn.Linear(emr_size + hidden_size, hidden_size)
+        self.dropout = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, x_emr, x_vitals):
+        x_emr = x_emr.float()
+        x_vitals = x_vitals.float()
+        # Transformer
+        x_vitals = self.embedding(x_vitals)
+        x_vitals = self.pos_encoder(x_vitals)
+        transformer_output = self.transformer_encoder(x_vitals)
+        # LSTM
+        lstm_out, _ = self.bi_lstm(transformer_output)
+        # Concat EMR + VITALS
+        hs = lstm_out[:, -1, :]
+        h = torch.cat([x_emr, hs], dim=-1)
+        # FC Layer
+        h = self.fc1(h)
+        h = self.dropout(h)
+        h = self.fc2(h).squeeze()
+        return h 
+
+
+
+# Attention LSTM
+class Attention(nn.Module):
+    def __init__(self, hidden_size):
+        super(Attention, self).__init__()
+        self.attn = nn.Linear(hidden_size, 1)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        # attn_weights = self.softmax(self.attn(x))
+        attn_weights = self.softmax(torch.relu(self.attn(x)))  # relu or tanh
+        context = torch.sum(attn_weights * x, dim=1)
+
+        return context, attn_weights
+
+class AttentionLSTM(nn.Module):
+    def __init__(self, emr_size, vitals_size, hidden_size=256, num_classes=1, dropout_rate=0.4):
+        super(AttentionLSTM, self).__init__()
+        # LSTM Layer
+        self.bi_lstm = nn.LSTM(vitals_size, hidden_size, num_layers=3, batch_first=True, bidirectional=True)
+        self.bi_lstm2 = nn.LSTM(hidden_size*2, hidden_size, num_layers=3, batch_first=True, bidirectional=True)
+        self.dropout_lstm = nn.Dropout(dropout_rate)
+        # Attention Layer
+        self.attention = Attention(hidden_size*2)
+        # FC Layer
+        self.fc1 = nn.Linear(emr_size + hidden_size*2, hidden_size)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc2 = nn.Linear(hidden_size, num_classes)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x_emr, x_vitals):
+        x_emr = x_emr.float()  # Convert input EMR data to Double type
+        x_vitals = x_vitals.float()
+        # LSTM Layer
+        lstm_out, _, = self.bi_lstm(x_vitals)
+        # lstm_out, _, = self.bi_lstm2(self.dropout(lstm_out))
+
+        # Attention Layer
+        context, attn_weights = self.attention(lstm_out)
+        # Concat EMR + Vitals
+        h = torch.cat([x_emr, context], dim=-1) # torch.Size([32, 148])
+
+        # FC Layer
+        h = self.fc1(h)
+        h = self.dropout(h)
+        h = self.fc2(h)
+        h = self.sigmoid(h).squeeze()       
+
+        # return h, attn_weights    # Attention score
+        return h
+    
