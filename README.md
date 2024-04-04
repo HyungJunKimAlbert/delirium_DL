@@ -44,11 +44,11 @@
 
 - Data Split
 
-Delirium      | Train  | Valid  | Test   | Total | 
-------------- | ------ | ------ | ------ | ----- |
-Case          | 669    | 155    | 129    | 953   |
-Control       | 1760   | 365    | 392    | 2517  |
-Incidence     | 0.2754 | 0.2981 | 0.2476 | 3470  |
+    Delirium      | Train  | Valid  | Test   | Total | 
+    ------------- | ------ | ------ | ------ | ----- |
+    Case          | 669    | 155    | 129    | 953   |
+    Control       | 1760   | 365    | 392    | 2517  |
+    Incidence     | 0.2754 | 0.2981 | 0.2476 | 3470  |
 
 ### Results
 
