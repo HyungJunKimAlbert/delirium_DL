@@ -16,7 +16,7 @@
 
 - Architecture:
   - Transformer based LSTM
-    - 6 Layers Transforemr Layer
+    - 6 Transforemr Layers
     - 2 bi-LSTM Layers
 
 - Hyperparameters
